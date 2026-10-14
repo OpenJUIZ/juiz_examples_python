@@ -1,7 +1,7 @@
 # juiz_examples_python
 
 ロボット・IoT 向けミドルウェア [juiz](https://github.com/OpenJUIZ/juiz) の Python 版サンプル集です。
-juiz 本体は crates.io の [juiz_app](https://crates.io/crates/juiz_app) 0.0.12、Python 用パッケージは PyPI の [pyjuiz](https://pypi.org/project/pyjuiz/) 0.0.12 を使うので、juiz のソースを手元に置かずに試せます。
+juiz 本体は crates.io の [juiz_app](https://crates.io/crates/juiz_app) 0.0.13、Python 用パッケージは PyPI の [pyjuiz](https://pypi.org/project/pyjuiz/) 0.0.13 を使うので、juiz のソースを手元に置かずに試せます。
 
 Rust 版のサンプルは [juiz_examples_rust](https://github.com/OpenJUIZ/juiz_examples_rust) にあります。
 
