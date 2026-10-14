@@ -2,6 +2,6 @@ from juiz import juiz_container_process
 
 
 @juiz_container_process(container_type="example_container_python")
-def example_container_python_get(container):
+def example_container_python_get(container) -> int:
     """Container の値を返す"""
     return container.value
