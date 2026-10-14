@@ -1,9 +1,9 @@
 # juiz_examples_python
 
-ロボット・IoT 向けミドルウェア [juiz](https://github.com/sugarsweetrobotics/juiz) の Python 版サンプル集です。
-juiz 本体は crates.io の [juiz_app](https://crates.io/crates/juiz_app) 0.0.9、Python 用パッケージは PyPI の [pyjuiz](https://pypi.org/project/pyjuiz/) 0.0.4 を使うので、juiz のソースを手元に置かずに試せます。
+ロボット・IoT 向けミドルウェア [juiz](https://github.com/OpenJUIZ/juiz) の Python 版サンプル集です。
+juiz 本体は crates.io の [juiz_app](https://crates.io/crates/juiz_app) 0.0.12、Python 用パッケージは PyPI の [pyjuiz](https://pypi.org/project/pyjuiz/) 0.0.12 を使うので、juiz のソースを手元に置かずに試せます。
 
-Rust 版のサンプルは [juiz_examples_rust](https://github.com/sugarsweetrobotics/juiz_examples_rust) にあります。
+Rust 版のサンプルは [juiz_examples_rust](https://github.com/OpenJUIZ/juiz_examples_rust) にあります。
 
 ## しくみ
 
@@ -27,7 +27,7 @@ cargo install juiz_app
 ## 2. pyjuiz をインストールする
 
 ```sh
-git clone https://github.com/sugarsweetrobotics/juiz_examples_python.git
+git clone https://github.com/OpenJUIZ/juiz_examples_python.git
 cd juiz_examples_python
 python3 -m venv .venv
 source .venv/bin/activate
@@ -47,11 +47,11 @@ pip install -r requirements.txt
 from juiz import juiz_process
 
 @juiz_process
-def increment_process_python(arg1: int = 0):
+def increment_process_python(arg1: int = 0) -> int:
     return arg1 + 1
 ```
 
-関数名とファイル名を同じにしておくと、juiz が設定ファイルの名前からファイルと関数を見つけます。引数の型と既定値は型ヒントと既定値から自動で読み取られます。
+関数名とファイル名を同じにしておくと、juiz が設定ファイルの名前からファイルと関数を見つけます。引数の型と既定値は型ヒントと既定値から、出力の型は戻り値の型ヒント (`-> int` など) から自動で読み取られます。戻り値の型ヒントは省略できません。
 
 ```sh
 juiz -f increment_process.conf -d
@@ -125,4 +125,5 @@ juiz container-process call "http://127.0.0.1:8000/container_process/get0::examp
 ## うまく動かないとき
 
 - `ModuleNotFoundError: No module named 'juiz'` や `setup_plugins ... failed` が出る場合は、pyjuiz を入れた venv が有効になっているか確認してください。それでも見つからない場合は `PYTHONPATH` に venv の site-packages を指定してください (例: `export PYTHONPATH=$(python -c 'import site; print(site.getsitepackages()[0])')`)。
+- `PyJuizProcessReturnsUnknownTypeError` が出る場合は、Process の関数に戻り値の型ヒント (`-> int` など) が書かれているか確認してください。
 - `AttributeError: module '' has no attribute ...` が出る場合は、ファイル名と関数名 (および設定ファイルの名前) がそろっているか確認してください。

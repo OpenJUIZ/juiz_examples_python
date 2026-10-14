@@ -7,6 +7,6 @@ class PyContainer:
 
 
 @juiz_container
-def example_container_python(initial_value: int = 0):
+def example_container_python(initial_value: int = 0) -> PyContainer:
     """整数値を 1 つ保持する Container"""
     return PyContainer(initial_value)
