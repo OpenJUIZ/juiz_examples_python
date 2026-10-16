@@ -1,7 +1,7 @@
 # juiz_examples_python
 
 ロボット・IoT 向けミドルウェア [juiz](https://github.com/OpenJUIZ/juiz) の Python 版サンプル集です。
-juiz 本体は crates.io の [juiz_app](https://crates.io/crates/juiz_app) 0.0.14、Python 用パッケージは PyPI の [pyjuiz](https://pypi.org/project/pyjuiz/) 0.0.14 を使うので、juiz のソースを手元に置かずに試せます。
+juiz 本体は crates.io の [juiz_app](https://crates.io/crates/juiz_app) 0.0.15、Python 用パッケージは PyPI の [pyjuiz](https://pypi.org/project/pyjuiz/) 0.0.15 を使うので、juiz のソースを手元に置かずに試せます。
 
 Rust 版のサンプルは [juiz_examples_rust](https://github.com/OpenJUIZ/juiz_examples_rust) にあります。
 
@@ -66,7 +66,7 @@ juiz process call "http://127.0.0.1:8000/process/increment0::increment_process_p
 # => CapsulePtr((value:Value(4), option: []))
 ```
 
-ブラウザで http://127.0.0.1:8000/docs を開くと Swagger UI からも試せます。
+API の定義 (OpenAPI) は http://127.0.0.1:8000/api-docs/openapi.json で取得できます。crates.io 版の juiz_app では Swagger UI (`/docs`) は無効になっています。
 
 `decrement_process.conf` も同じ使い方です (1 を引く Process)。
 
