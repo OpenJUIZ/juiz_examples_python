@@ -1,43 +1,44 @@
 # juiz_examples_python
 
 ロボット・IoT 向けミドルウェア [juiz](https://github.com/OpenJUIZ/juiz) の Python 版サンプル集です。
-juiz 本体は crates.io の [juiz_app](https://crates.io/crates/juiz_app) 0.0.16、Python 用パッケージは PyPI の [pyjuiz](https://pypi.org/project/pyjuiz/) 0.0.16 を使うので、juiz のソースを手元に置かずに試せます。
+`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.0.16 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
 
 Rust 版のサンプルは [juiz_examples_rust](https://github.com/OpenJUIZ/juiz_examples_rust) にあります。
 
 ## しくみ
 
-Python で書いた Process や Container は単体では動きません。`juiz` コマンド (Rust 製) が設定ファイル (`*.conf`) を読み、そこに書かれた Python ファイルを組み込みの Python インタプリタで読み込んで実行します。
-そのため、`juiz` コマンドと `pyjuiz` パッケージの両方をインストールします。
+Python で書いた Process や Container は単体では動きません。`juiz` コマンド (Rust 製) が設定ファイル (`*.conf`) を読み、そこに書かれた Python ファイルを読み込んで実行します。
+`pip install juiz-cli` を実行すると、`juiz` コマンドと、Process を書くための Python パッケージ [pyjuiz](https://pypi.org/project/pyjuiz/) (`import juiz`) の両方が入ります。
 
 ## 必要なもの
 
-- Linux または macOS
-- Rust (stable)。インストールは https://rustup.rs/ を参照してください。
-- Python 3 と、その開発用ライブラリ (Ubuntu なら `sudo apt install python3-dev python3-venv`)
+- Python 3.10 以降
+- Linux (x86_64 / aarch64)、macOS (Apple Silicon / Intel)、Windows (x86_64) のいずれか
 
-## 1. juiz コマンドをインストールする
-
-```sh
-cargo install juiz_app
-```
-
-`juiz` コマンドが `~/.cargo/bin` に入ります。juiz はビルド時に見つけた Python (`python3`) を組み込むので、手順 2 でも同じ Python を使ってください。
-
-## 2. pyjuiz をインストールする
+## 1. インストールする
 
 ```sh
 git clone https://github.com/OpenJUIZ/juiz_examples_python.git
 cd juiz_examples_python
 python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+source .venv/bin/activate        # Windows では .venv\Scripts\activate
+pip install -r requirements.txt  # juiz-cli が入る
+juiz --help
 ```
 
 以降の手順は、この venv を有効にしたターミナルで実行してください。
 設定ファイルは `./process` などの相対パスで Python ファイルを探すので、**リポジトリのルートで** `juiz` を実行してください。
 
-## 3. 動かしてみる
+<details>
+<summary>cargo でインストールした juiz を使う場合</summary>
+
+Rust のサンプルも同じ `juiz` で動かしたい場合は、`cargo install juiz_app` で入れた `juiz` を使い、Python 側は `pip install pyjuiz==0.0.16` だけを入れます。
+この `juiz` はビルド時に見つけた Python (`python3`) を組み込むので、venv も同じ Python で作ってください (Ubuntu なら `sudo apt install python3-dev python3-venv` も必要です)。
+pip の `juiz` は CI でビルドされたものなので、手元でビルドした Rust プラグインは読み込めません (Rust のコンパイラと juiz_sdk の版がそろっていることを起動時に確かめるため)。
+
+</details>
+
+## 2. 動かしてみる
 
 ### Process: increment_process
 
@@ -66,7 +67,7 @@ juiz process call "http://127.0.0.1:8000/process/increment0::increment_process_p
 # => CapsulePtr((value:Value(4), option: []))
 ```
 
-API の定義 (OpenAPI) は http://127.0.0.1:8000/api-docs/openapi.json で取得できます。crates.io 版の juiz_app では Swagger UI (`/docs`) は無効になっています。
+API の定義 (OpenAPI) は http://127.0.0.1:8000/api-docs/openapi.json で取得できます。pip 版・crates.io 版の juiz では Swagger UI (`/docs`) は無効になっています。
 
 `decrement_process.conf` も同じ使い方です (1 を引く Process)。
 
@@ -120,11 +121,11 @@ juiz container-process call "http://127.0.0.1:8000/container_process/get0::examp
 | `container/` | Container (状態を持つ) と ContainerProcess のサンプル |
 | `component/` | 複数の要素を 1 つのファイルにまとめた Component のサンプル |
 | `*.conf` | 各サンプルを動かすための juiz の設定ファイル |
-| `requirements.txt` | pyjuiz のバージョン指定 |
+| `requirements.txt` | juiz-cli のバージョン指定 |
 
 ## うまく動かないとき
 
-- `ModuleNotFoundError: No module named 'juiz'` や `setup_plugins ... failed` が出る場合は、pyjuiz を入れた venv が有効になっているか確認してください。それでも見つからない場合は `PYTHONPATH` に venv の site-packages を指定してください (例: `export PYTHONPATH=$(python -c 'import site; print(site.getsitepackages()[0])')`)。
+- `ModuleNotFoundError: No module named 'juiz'` や `setup_plugins ... failed` が出る場合は、juiz-cli を入れた venv が有効になっているか確認してください。それでも見つからない場合は `PYTHONPATH` に venv の site-packages を指定してください (例: `export PYTHONPATH=$(python -c 'import site; print(site.getsitepackages()[0])')`)。
 - `PyJuizProcessReturnsUnknownTypeError` が出る場合は、Process の関数に戻り値の型ヒント (`-> int` など) が書かれているか確認してください。
 - `AttributeError: module '' has no attribute ...` が出る場合は、ファイル名と関数名 (および設定ファイルの名前) がそろっているか確認してください。
 
