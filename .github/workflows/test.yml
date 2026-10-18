@@ -22,3 +22,5 @@ jobs:
         run: pip install -r requirements.txt
       - name: サンプルを動かして結果を確かめる
         run: python tests/test_examples.py
+        env:
+          PYTHONIOENCODING: utf-8

@@ -98,7 +98,10 @@ def run_case(juiz: str, conf: str, calls: list, expected_output: str | None) -> 
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
     with tempfile.NamedTemporaryFile("w+", suffix=".log", delete=False) as log:
         log_path = log.name
-        server = subprocess.Popen([juiz, "-f", conf, "-d"], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, **kwargs)
+        # 出力をファイルに書くと Python の print がバッファされて終了まで出てこないので、バッファを切る
+        env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
+        server = subprocess.Popen([juiz, "-f", conf, "-d"], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
+                                  env=env, **kwargs)
     ok = True
     try:
         wait_for_port(PORT, 60, server)
