@@ -122,6 +122,7 @@ juiz container-process call "http://127.0.0.1:8000/container_process/get0::examp
 | `component/` | 複数の要素を 1 つのファイルにまとめた Component のサンプル |
 | `*.conf` | 各サンプルを動かすための juiz の設定ファイル |
 | `requirements.txt` | juiz-cli のバージョン指定 |
+| `tests/test_examples.py` | 上のサンプルを起動して呼び出し、結果を確かめるテスト (`python tests/test_examples.py`)。CI でも実行する |
 
 ## うまく動かないとき
 
