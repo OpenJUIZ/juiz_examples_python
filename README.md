@@ -1,7 +1,7 @@
 # juiz_examples_python
 
 ロボット・IoT 向けミドルウェア [juiz](https://github.com/OpenJUIZ/juiz) の Python 版サンプル集です。
-`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.0.20 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
+`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.0.21 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
 
 Rust 版のサンプルは [juiz_examples_rust](https://github.com/OpenJUIZ/juiz_examples_rust) にあります。
 
@@ -32,7 +32,7 @@ juiz --help
 <details>
 <summary>cargo でインストールした juiz を使う場合</summary>
 
-Rust のサンプルも同じ `juiz` で動かしたい場合は、`cargo install juiz_app` で入れた `juiz` を使い、Python 側は `pip install pyjuiz==0.0.20` だけを入れます。
+Rust のサンプルも同じ `juiz` で動かしたい場合は、`cargo install juiz_app` で入れた `juiz` を使い、Python 側は `pip install pyjuiz==0.0.21` だけを入れます。
 この `juiz` はビルド時に見つけた Python (`python3`) を組み込むので、venv も同じ Python で作ってください (Ubuntu なら `sudo apt install python3-dev python3-venv` も必要です)。
 pip の `juiz` は CI でビルドされたものなので、手元でビルドした Rust プラグインは読み込めません (Rust のコンパイラと juiz_sdk の版がそろっていることを起動時に確かめるため)。
 
@@ -111,6 +111,57 @@ juiz process call "http://127.0.0.1:8000/process/increment0::example_component_p
 juiz container-process call "http://127.0.0.1:8000/container_process/set0::example_component_python_container_set:container0" '{"value": 7}' -p
 juiz container-process call "http://127.0.0.1:8000/container_process/get0::example_component_python_container_get:container0" '{}' -p
 # => CapsulePtr((value:Value(7), option: []))
+```
+
+### ネームスペース: 同じ構成を並べて動かす
+
+ネームスペースを使うと、同じ名前の Process を 1 つの System に並べて置けます。ID はクラスの後ろ・名前の前にネームスペースが入った `http://127.0.0.1:8000/process/robot1/talker0::talker_python` の形になります。
+
+#### 1 つの設定ファイルで 2 台分を置く: namespace.conf
+
+`talker0` と `listener0` を `robot1` と `robot2` の 2 つのネームスペースに置き、Topic `chatter` でつなぎます。Topic 名もネームスペースの中で解決される (`robot1/chatter` と `robot2/chatter`) ので、それぞれの `listener0` には同じネームスペースの `talker0` の出力だけが届きます。
+
+```sh
+juiz -f namespace.conf -d
+# talker_python says "Hello from robot1"
+# listener_python receives "Hello from robot1"
+# talker_python says "Hello from robot2"
+# listener_python receives "Hello from robot2"
+# ...
+```
+
+別のターミナルから、ネームスペースの列つきで一覧を出したり、ネームスペース付きの ID で呼び出したりできます。
+
+```sh
+juiz process list --long
+# NAMESPACE  NAME       TYPE           ID
+# /robot1    talker0    talker_python  http://127.0.0.1:8000/process/robot1/talker0::talker_python
+# ...
+juiz process call "http://127.0.0.1:8000/process/robot1/talker0::talker_python" '{"message": "Hi"}' -p
+# => CapsulePtr((value:Value("Hi"), option: []))
+```
+
+設定ファイルでは各要素に `namespace` を書きます (`/` で始めるとルートからの絶対指定)。トップレベルに `namespace` を書くと、全体の既定のネームスペースになります。
+
+#### 同じ設定ファイルを 2 つ起動する: --namespace
+
+`--namespace` を付けると、設定ファイルの既定のネームスペースを置き換えて起動できます。2 つのターミナルで次のように起動すると、2 つ目は 1 つ目のサブシステムになり (8001 番ポートで待ち受け)、1 つの System として扱えます。
+
+```sh
+juiz -f increment_process.conf --namespace robot1 -d
+```
+
+```sh
+juiz -f increment_process.conf --namespace robot2 -d
+```
+
+```sh
+juiz process list --namespace robot2
+# => ["http://127.0.0.1:8001/process/robot2/increment0::increment_process_python"]
+juiz process call "http://127.0.0.1:8000/process/robot1/increment0::increment_process_python" '{"arg1": 1}' -p
+# => CapsulePtr((value:Value(2), option: []))
+juiz process call "http://127.0.0.1:8001/process/robot2/increment0::increment_process_python" '{"arg1": 10}' -p
+# => CapsulePtr((value:Value(11), option: []))
 ```
 
 ## 構成
