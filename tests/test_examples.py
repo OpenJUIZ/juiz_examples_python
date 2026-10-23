@@ -111,7 +111,9 @@ def run_case(juiz: str, conf: str, calls: list, expected_output: str | list[str]
     try:
         wait_for_port(PORT, 60, server)
         for args, expected in calls:
-            result = subprocess.run([juiz, *args], cwd=ROOT, capture_output=True, text=True, timeout=30)
+            # juiz の出力は UTF-8 (Windows の既定の cp1252 では日本語のエラーメッセージを読めない)
+            result = subprocess.run([juiz, *args], cwd=ROOT, capture_output=True, text=True,
+                                    encoding="utf-8", errors="replace", timeout=30)
             print(f"juiz {' '.join(args)}\n  {result.stdout.strip()}", flush=True)
             if result.returncode != 0 or expected not in result.stdout:
                 print(f"NG: {expected!r} が出力に含まれていません\n{result.stderr}", file=sys.stderr)
@@ -192,7 +194,9 @@ def run_two_namespaces(juiz: str) -> bool:
             (["process", "call", r2, '{"arg1": 10}', "-p"], "Value(11)"),
         ]
         for args, expected in calls:
-            result = subprocess.run([juiz, *args], cwd=ROOT, capture_output=True, text=True, timeout=60)
+            # juiz の出力は UTF-8 (Windows の既定の cp1252 では日本語のエラーメッセージを読めない)
+            result = subprocess.run([juiz, *args], cwd=ROOT, capture_output=True, text=True,
+                                    encoding="utf-8", errors="replace", timeout=60)
             print(f"juiz {' '.join(args)}\n  {result.stdout.strip()}", flush=True)
             if result.returncode != 0 or expected not in result.stdout:
                 print(f"NG: {expected!r} が出力に含まれていません\n{result.stderr}", file=sys.stderr)
