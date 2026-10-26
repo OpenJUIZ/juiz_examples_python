@@ -16,10 +16,15 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
+import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PORT = 8000
 BASE = f"http://127.0.0.1:{PORT}"
+
+# 呼び出しの代わりに (EXECUTE, ID) と書くと、HTTP の /api/process/execute を呼ぶ
+EXECUTE = "execute"
 
 # (設定ファイル, [(juiz のサブコマンドと引数, 出力に含まれるべき文字列)], サーバーの出力に含まれるべき文字列)
 CASES = [
@@ -55,7 +60,34 @@ CASES = [
         (["process", "call", f"{BASE}/process/robot1/talker0::talker_python", '{"message": "Hi"}', "-p"],
          "Value(\"Hi\")"),
     ], ['listener_python receives "Hello from robot1"', 'listener_python receives "Hello from robot2"']),
+    # 同じ画像処理を Composite (pipeline0) と Pull 接続 (ratio0) で組み、同じ結果になること
+    ("image_pipeline.conf", [
+        (["process", "call", f"{BASE}/process/pipeline0::image_pipeline_python",
+          '{"path": "images/sample.png", "width": 320, "height": 240, "threshold": 128}', "-p"], "Value(0.281"),
+        (["process", "call", f"{BASE}/process/pipeline0::image_pipeline_python",
+          '{"path": "images/sample.png", "width": 320, "height": 240, "threshold": 200}', "-p"],
+         "Value(0.146"),
+        # 接続をたどって上流から値を集めるのは execute (CLI にはないので HTTP の API を直接呼ぶ)
+        ((EXECUTE, f"{BASE}/process/ratio0::image_white_ratio_python"), "0.281"),
+    ], None),
 ]
+
+
+def run_call(juiz: str, args) -> tuple[int, str, str]:
+    """1 つの呼び出しを行い、(終了コード, 標準出力, 標準エラー) を返す。"""
+    if isinstance(args, tuple) and args[0] == EXECUTE:
+        url = f"{BASE}/api/process/execute?" + urllib.parse.urlencode({"identifier": args[1]})
+        request = urllib.request.Request(url, data=b"{}", method="PATCH",
+                                         headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return 0, response.read().decode("utf-8"), ""
+        except OSError as e:
+            return 1, "", str(e)
+    # juiz の出力は UTF-8 (Windows の既定の cp1252 では日本語のエラーメッセージを読めない)
+    result = subprocess.run([juiz, *args], cwd=ROOT, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace", timeout=30)
+    return result.returncode, result.stdout, result.stderr
 
 
 def wait_for_port(port: int, timeout: float, server: subprocess.Popen) -> None:
@@ -77,6 +109,10 @@ def wait_for_port_free(port: int, timeout: float) -> None:
     while True:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                # HTTP の API を直接呼ぶとサーバー側に TIME_WAIT が残る。juiz と同じく SO_REUSEADDR を付けて確かめる
+                # (Windows の SO_REUSEADDR は意味が違い、TIME_WAIT で bind が止まることもないので付けない)
+                if os.name != "nt":
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 s.bind(("127.0.0.1", port))
                 return
         except OSError:
@@ -111,12 +147,10 @@ def run_case(juiz: str, conf: str, calls: list, expected_output: str | list[str]
     try:
         wait_for_port(PORT, 60, server)
         for args, expected in calls:
-            # juiz の出力は UTF-8 (Windows の既定の cp1252 では日本語のエラーメッセージを読めない)
-            result = subprocess.run([juiz, *args], cwd=ROOT, capture_output=True, text=True,
-                                    encoding="utf-8", errors="replace", timeout=30)
-            print(f"juiz {' '.join(args)}\n  {result.stdout.strip()}", flush=True)
-            if result.returncode != 0 or expected not in result.stdout:
-                print(f"NG: {expected!r} が出力に含まれていません\n{result.stderr}", file=sys.stderr)
+            returncode, stdout, stderr = run_call(juiz, args)
+            print(f"juiz {' '.join(args)}\n  {stdout.strip()}", flush=True)
+            if returncode != 0 or expected not in stdout:
+                print(f"NG: {expected!r} が出力に含まれていません\n{stderr}", file=sys.stderr)
                 ok = False
                 break
         if isinstance(expected_output, str):

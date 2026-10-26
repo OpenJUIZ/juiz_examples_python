@@ -1,7 +1,7 @@
 # juiz_examples_python
 
 ロボット・IoT 向けミドルウェア [juiz](https://github.com/OpenJUIZ/juiz) の Python 版サンプル集です。
-`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.0.21 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
+`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.0.22 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
 
 Rust 版のサンプルは [juiz_examples_rust](https://github.com/OpenJUIZ/juiz_examples_rust) にあります。
 
@@ -32,7 +32,7 @@ juiz --help
 <details>
 <summary>cargo でインストールした juiz を使う場合</summary>
 
-Rust のサンプルも同じ `juiz` で動かしたい場合は、`cargo install juiz_app` で入れた `juiz` を使い、Python 側は `pip install pyjuiz==0.0.21` だけを入れます。
+Rust のサンプルも同じ `juiz` で動かしたい場合は、`cargo install juiz_app` で入れた `juiz` を使い、Python 側は `pip install pyjuiz==0.0.22` だけを入れます。
 この `juiz` はビルド時に見つけた Python (`python3`) を組み込むので、venv も同じ Python で作ってください (Ubuntu なら `sudo apt install python3-dev python3-venv` も必要です)。
 pip の `juiz` は CI でビルドされたものなので、手元でビルドした Rust プラグインは読み込めません (Rust のコンパイラと juiz_sdk の版がそろっていることを起動時に確かめるため)。
 
@@ -164,6 +164,78 @@ juiz process call "http://127.0.0.1:8001/process/robot2/increment0::increment_pr
 # => CapsulePtr((value:Value(11), option: []))
 ```
 
+### Composition: 画像処理の段を 1 つの Process にまとめる
+
+画像を読み込み → 縮小 → 二値化して、白い画素の割合を返す処理を、4 つの Process で書きました ([process/](process/) の `image_*_python.py`)。
+
+```python
+@juiz_process
+def image_resize_python(img: Image, width: int = 320, height: int = 240) -> Image:
+    return img.resize((width, height))
+```
+
+[image_pipeline.conf](image_pipeline.conf) では、この 4 段を 2 通りに組んでいます。
+
+1. **Composite**: `composites:` に式の木を書き、4 段を 1 つの Process の型 `image_pipeline_python` にまとめる。インスタンス `pipeline0` は普通の Process と同じように呼べる。
+2. **接続**: 4 段を別々の Process (`load0` → `resize0` → `binarize0` → `ratio0`) として置き、Pull 接続でつなぐ。
+
+```yaml
+composites:
+  - type_name: image_pipeline_python
+    body:
+      process: image_white_ratio_python
+      args:
+        img:
+          process: image_binarize_python
+          args:
+            img:
+              process: image_resize_python
+              args:
+                img:
+                  process: image_load_python
+```
+
+`args` に書かなかった引数 (`path`、`width`、`height`、`threshold`) は、元の名前のまま Composite の引数になります。
+
+```sh
+juiz -f image_pipeline.conf -d
+```
+
+別のターミナルから、Composite は引数を全部渡して `call` します。
+
+```sh
+juiz process call "http://127.0.0.1:8000/process/pipeline0::image_pipeline_python" '{"path": "images/sample.png", "width": 320, "height": 240, "threshold": 128}' -p
+# => CapsulePtr((value:Value(0.2810286458333333), option: []))
+juiz process list --long   # pipeline0 の下に式の木が出る
+```
+
+接続版は、末端の `ratio0` を `execute` すると、上流の `binarize0` → `resize0` → `load0` から値が集まります (CLI にはまだ execute がないので HTTP の API を呼びます)。各段の引数は既定値のままです。
+
+```sh
+curl -X PATCH "http://127.0.0.1:8000/api/process/execute?identifier=http://127.0.0.1:8000/process/ratio0::image_white_ratio_python" -H "Content-Type: application/json" -d "{}"
+# => 0.2810286458333333
+```
+
+#### どちらを使うか
+
+| | Composite | 接続 |
+| --- | --- | --- |
+| 外から見える形 | 1 つの Process。引数は全段の引数をまとめたもの | 段ごとの Process |
+| 呼び方 | `call` に引数を渡すだけ | 末端を `execute` する。各段の引数は段ごとに設定する |
+| 途中の段 | 外からは呼べない (インスタンスを作らない) | 1 段ずつ呼んだり、出力を別の Process に配ったりできる |
+| 向いている使い方 | 決まった前処理をひとまとめにして、サーバーのように呼び出す | 実行コンテキストで周期的に回す、途中の結果を複数の Process で使う、別プロセスの juiz とつなぐ |
+
+#### 時間を測る
+
+`juiz -f image_pipeline.conf -d` を起動したまま、[scripts/time_image_pipeline.py](scripts/time_image_pipeline.py) を実行すると、Composite 版と接続版を何度か呼んで 1 回あたりの時間を出します。比べるために、同じ 4 つの関数を juiz を通さずに Python だけでつないだ時間も出します。
+
+```sh
+python scripts/time_image_pipeline.py 20
+```
+
+今の juiz では、Python の段の間で画像を受け渡すたびに Python と juiz (Rust) の間で画像を変換するので、Composite 版も接続版もほぼ同じ時間で、Python だけの場合よりかなり遅くなります。
+Python 同士の段の間で変換を省く遅延評価 ([OpenJUIZ/juiz#3](https://github.com/OpenJUIZ/juiz/issues/3)) が入ると、Composite 版の時間が Python だけの場合に近づくはずです。
+
 ## 構成
 
 | パス | 内容 |
@@ -171,6 +243,8 @@ juiz process call "http://127.0.0.1:8001/process/robot2/increment0::increment_pr
 | `process/` | Process (入力と出力を持つ冪等な関数) のサンプル |
 | `container/` | Container (状態を持つ) と ContainerProcess のサンプル |
 | `component/` | 複数の要素を 1 つのファイルにまとめた Component のサンプル |
+| `images/` | 画像処理のサンプル (`image_pipeline.conf`) が読み込む画像 |
+| `scripts/time_image_pipeline.py` | `image_pipeline.conf` の Composite 版と接続版の時間を測るスクリプト |
 | `*.conf` | 各サンプルを動かすための juiz の設定ファイル |
 | `requirements.txt` | juiz-cli のバージョン指定 |
 | `tests/test_examples.py` | 上のサンプルを起動して呼び出し、結果を確かめるテスト (`python tests/test_examples.py`)。CI でも実行する |
