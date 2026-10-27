@@ -25,6 +25,21 @@ BASE = f"http://127.0.0.1:{PORT}"
 
 # 呼び出しの代わりに (EXECUTE, ID) と書くと、HTTP の /api/process/execute を呼ぶ
 EXECUTE = "execute"
+# 呼び出しの代わりに (SCRIPT, パス) と書くと、その Python のスクリプトを実行する
+SCRIPT = "script"
+
+
+class Fails(str):
+    """期待する出力を Fails("...") と書くと、呼び出しがエラーになり、出力にその文字列が含まれることを確かめる。
+
+    juiz の CLI は呼び出しがエラーでも終了コード 0 で終わるので、出力の "Error" で見分ける。
+    """
+
+# サンプル共通の型 (types/geometry.jidl) の識別子。4 つのサンプルリポジトリで同じになる
+# (言語をまたいでつながる) ことを確かめるため、指紋をここに書いておく。types/geometry.jidl を変えたら
+# 4 つのリポジトリの types/geometry.jidl とこの値をそろえる
+POSE2D_ID = "examples.geometry.Pose2D@sha256:123b8c15cda217478b331e2133a5de7c5aafb8075d0ca203e8a7e7e50797cf9b"
+TWIST2D_ID = "examples.geometry.Twist2D@sha256:115b9e0f7b27c487a3af04922d19364cc387e3116468e90f22034c4f51a9fe71"
 
 # (設定ファイル, [(juiz のサブコマンドと引数, 出力に含まれるべき文字列)], サーバーの出力に含まれるべき文字列)
 CASES = [
@@ -70,7 +85,28 @@ CASES = [
         # 接続をたどって上流から値を集めるのは execute (CLI にはないので HTTP の API を直接呼ぶ)
         ((EXECUTE, f"{BASE}/process/ratio0::image_white_ratio_python"), "0.281"),
     ], None),
+    # サンプル共通の型 (types/geometry.jidl)。twist0 の Twist2D を move0 が受け、move0 の Pose2D を print0 が受ける
+    ("typed_pose.conf", [
+        # execute は twist0 から速度 (linear=0.5) を取ってきて動き、結果を print0 に Push する
+        ((EXECUTE, f"{BASE}/process/move0::pose_move_python"), '"position":{"x":0.5,"y":0.0}'),
+        # 型付きの引数も CLI からは辞書で渡せる。書かなかったフィールドは既定値になる
+        (["process", "call", f"{BASE}/process/move0::pose_move_python",
+          '{"pose": {"position": {"x": 1.0, "y": 2.0}}, "twist": {"linear": 1.0}, "dt": 2.0}', "-p"],
+         '"position":{"x":3.0,"y":2.0}'),
+        # 型に合わない辞書は、関数を呼ぶ前にエラーになる (エラーに場所 pose.position.x が付く)
+        (["process", "call", f"{BASE}/process/move0::pose_move_python",
+          '{"pose": {"position": {"x": "a"}}, "twist": {}, "dt": 1.0}', "-p"], Fails("pose.position.x")),
+        # 生成した client stub (PoseMoveClient) は Pose2D で受け取る
+        ((SCRIPT, "scripts/pose_client.py"), "Pose2D: x=3.00 y=2.00 theta=0.00 frame_id=map"),
+        (["type", "list"], POSE2D_ID),
+        (["type", "list"], TWIST2D_ID),
+        (["type", "show", "examples.geometry.Pose2D"], "used by: pose_move_python, pose_print_python"),
+    ], "pose_print_python receives Pose2D(x=0.50, y=0.00, theta=0.00, frame_id=map)"),
 ]
+
+# 型の合わない接続 (Twist2D を Pose2D の引数へ) を書いた設定ファイル。juiz は起動せずにエラーで終わる
+MISMATCH_CONF = "typed_mismatch.conf"
+MISMATCH_ERROR = f"{TWIST2D_ID} cannot be read as {POSE2D_ID}"
 
 
 def run_call(juiz: str, args) -> tuple[int, str, str]:
@@ -84,6 +120,10 @@ def run_call(juiz: str, args) -> tuple[int, str, str]:
                 return 0, response.read().decode("utf-8"), ""
         except OSError as e:
             return 1, "", str(e)
+    if isinstance(args, tuple) and args[0] == SCRIPT:
+        result = subprocess.run([sys.executable, args[1]], cwd=ROOT, capture_output=True, text=True,
+                                encoding="utf-8", errors="replace", timeout=30)
+        return result.returncode, result.stdout, result.stderr
     # juiz の出力は UTF-8 (Windows の既定の cp1252 では日本語のエラーメッセージを読めない)
     result = subprocess.run([juiz, *args], cwd=ROOT, capture_output=True, text=True,
                             encoding="utf-8", errors="replace", timeout=30)
@@ -131,6 +171,37 @@ def wait_for_output(path: str, expected: str, timeout: float) -> bool:
     return False
 
 
+def generate_python_types(juiz: str) -> bool:
+    """README の手順どおり、データ型のサンプルの Python の型を gen/ に作る。"""
+    print("--- juiz idl -g python -o gen types/geometry.jidl", flush=True)
+    result = subprocess.run([juiz, "idl", "-g", "python", "-o", "gen", "types/geometry.jidl"], cwd=ROOT,
+                            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+    if result.returncode != 0:
+        print(f"NG: juiz idl が失敗しました\n{result.stdout}{result.stderr}", file=sys.stderr)
+        return False
+    return True
+
+
+def run_mismatch(juiz: str) -> bool:
+    """型の合わない接続を書いた設定ファイルでは、juiz がエラーで終わること。"""
+    print(f"--- {MISMATCH_CONF}", flush=True)
+    wait_for_port_free(PORT, 30)
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    try:
+        result = subprocess.run([juiz, "-f", MISMATCH_CONF, "-d"], cwd=ROOT, capture_output=True, text=True,
+                                encoding="utf-8", errors="replace", env=env, timeout=60)
+    except subprocess.TimeoutExpired:
+        print("NG: 型の合わない接続なのに juiz が起動したままです", file=sys.stderr)
+        return False
+    output = result.stdout + result.stderr
+    if result.returncode == 0 or MISMATCH_ERROR not in output:
+        print(f"NG: 型が合わないエラーになりませんでした (終了コード {result.returncode})\n{output}",
+              file=sys.stderr)
+        return False
+    print(f"  {MISMATCH_ERROR}", flush=True)
+    return True
+
+
 def run_case(juiz: str, conf: str, calls: list, expected_output: str | list[str] | None) -> bool:
     print(f"--- {conf}", flush=True)
     wait_for_port_free(PORT, 30)
@@ -149,6 +220,12 @@ def run_case(juiz: str, conf: str, calls: list, expected_output: str | list[str]
         for args, expected in calls:
             returncode, stdout, stderr = run_call(juiz, args)
             print(f"juiz {' '.join(args)}\n  {stdout.strip()}", flush=True)
+            if isinstance(expected, Fails):
+                if "Error" not in stdout + stderr or expected not in stdout + stderr:
+                    print(f"NG: 失敗して {str(expected)!r} を出すはずでした\n{stderr}", file=sys.stderr)
+                    ok = False
+                    break
+                continue
             if returncode != 0 or expected not in stdout:
                 print(f"NG: {expected!r} が出力に含まれていません\n{stderr}", file=sys.stderr)
                 ok = False
@@ -256,9 +333,13 @@ def main() -> int:
     if juiz is None:
         print("juiz コマンドが見つかりません (pip install -r requirements.txt を実行してください)", file=sys.stderr)
         return 1
+    if not generate_python_types(juiz):
+        return 1
     failed = [conf for conf, calls, expected in CASES if not run_case(juiz, conf, calls, expected)]
     if not run_two_namespaces(juiz):
         failed.append("increment_process.conf --namespace")
+    if not run_mismatch(juiz):
+        failed.append(MISMATCH_CONF)
     if failed:
         print(f"失敗したサンプル: {', '.join(failed)}", file=sys.stderr)
         return 1
