@@ -18,9 +18,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # データ型のサンプルのため、公開までは requirements.txt が juiz-cli を juiz の main のコミットからビルドする
-      # (Rust が要る)。公開後はこの手順を外す
-      - uses: dtolnay/rust-toolchain@stable
       - name: juiz-cli をインストールする
         run: pip install -r requirements.txt
       - name: サンプルを動かして結果を確かめる

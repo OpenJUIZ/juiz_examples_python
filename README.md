@@ -1,9 +1,7 @@
 # juiz_examples_python
 
 ロボット・IoT 向けミドルウェア [juiz](https://github.com/OpenJUIZ/juiz) の Python 版サンプル集です。
-`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.0.22 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
-
-> データ型のサンプル (types/geometry.jidl) は juiz の次の版 (0.0.23) で入る機能を使うので、公開までは `requirements.txt` で juiz の main のコミットを指定しています (juiz-cli のビルドに Rust が要ります)。
+`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.0.23 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
 
 Rust 版のサンプルは [juiz_examples_rust](https://github.com/OpenJUIZ/juiz_examples_rust) にあります。
 
@@ -34,7 +32,7 @@ juiz --help
 <details>
 <summary>cargo でインストールした juiz を使う場合</summary>
 
-Rust のサンプルも同じ `juiz` で動かしたい場合は、`cargo install juiz_app` で入れた `juiz` を使い、Python 側は `pip install pyjuiz==0.0.22` だけを入れます。
+Rust のサンプルも同じ `juiz` で動かしたい場合は、`cargo install juiz_app` で入れた `juiz` を使い、Python 側は `pip install pyjuiz==0.0.23` だけを入れます。
 この `juiz` はビルド時に見つけた Python (`python3`) を組み込むので、venv も同じ Python で作ってください (Ubuntu なら `sudo apt install python3-dev python3-venv` も必要です)。
 pip の `juiz` は CI でビルドされたものなので、手元でビルドした Rust プラグインは読み込めません (Rust のコンパイラと juiz_sdk の版がそろっていることを起動時に確かめるため)。
 
@@ -253,7 +251,7 @@ record Twist2D { double linear = 0.0; double angular = 0.0; }
 process Pose2D pose_move(Pose2D pose, Twist2D twist, double dt = 1.0);
 ```
 
-> データ型は juiz の次の版 (0.0.23) で入ります。公開までは `requirements.txt` で juiz の main のコミットを指定しているので、`pip install -r requirements.txt` で juiz-cli をソースからビルドします (Rust が要ります。https://rustup.rs/)。
+> データ型は juiz-cli 0.0.23 から使えます。
 
 まず Python の型を `gen/` に作ります。設定ファイルの `option.pythonpath` で `gen/` を読みます。
 
