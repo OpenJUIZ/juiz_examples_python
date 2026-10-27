@@ -1,1 +1,4 @@
-juiz-cli==0.0.22
+# データ型のサンプル (types/geometry.jidl) は juiz の次の版 (0.0.23) で入る機能を使うので、公開までは
+# juiz の main のコミットから入れる (juiz-cli のビルドに Rust が要る)。公開後は juiz-cli==0.0.23 に戻す
+pyjuiz @ git+https://github.com/OpenJUIZ/juiz@9e07ce30bafb29d71e9896eb90bbafb9fdbafa25#subdirectory=bindings/pyjuiz
+juiz-cli @ git+https://github.com/OpenJUIZ/juiz@9e07ce30bafb29d71e9896eb90bbafb9fdbafa25#subdirectory=bindings/juiz_py

@@ -3,6 +3,8 @@
 ロボット・IoT 向けミドルウェア [juiz](https://github.com/OpenJUIZ/juiz) の Python 版サンプル集です。
 `juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.0.22 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
 
+> データ型のサンプル (types/geometry.jidl) は juiz の次の版 (0.0.23) で入る機能を使うので、公開までは `requirements.txt` で juiz の main のコミットを指定しています (juiz-cli のビルドに Rust が要ります)。
+
 Rust 版のサンプルは [juiz_examples_rust](https://github.com/OpenJUIZ/juiz_examples_rust) にあります。
 
 ## しくみ
@@ -236,6 +238,109 @@ python scripts/time_image_pipeline.py 20
 今の juiz では、Python の段の間で画像を受け渡すたびに Python と juiz (Rust) の間で画像を変換するので、Composite 版も接続版もほぼ同じ時間で、Python だけの場合よりかなり遅くなります。
 Python 同士の段の間で変換を省く遅延評価 ([OpenJUIZ/juiz#3](https://github.com/OpenJUIZ/juiz/issues/3)) が入ると、Composite 版の時間が Python だけの場合に近づくはずです。
 
+### データ型: 言語をまたいで同じ型を使う
+
+Process の引数と戻り値に型を付けられます。型は IDL (JIDL) で書き、`juiz idl` で各言語の型を作ります。
+このリポジトリの [types/geometry.jidl](types/geometry.jidl) は、Python・[Rust](https://github.com/OpenJUIZ/juiz_examples_rust)・[C++](https://github.com/OpenJUIZ/juiz_examples_cpp)・[Haskell](https://github.com/OpenJUIZ/juiz_examples_haskell) の 4 つのサンプルリポジトリで同じ中身にしてあり、どの言語で作っても型の指紋 (`@sha256:…`) が同じになります。指紋が同じ型どうしは、言語が違ってもそのままつながります (ほかの 3 つのリポジトリには、その言語の Process とこのリポジトリと同じ Python の Process をつなぐ例があります)。
+
+```text
+namespace examples.geometry;
+
+record Point2D { double x = 0.0; double y = 0.0; }
+record Pose2D  { Point2D position = {"x": 0.0, "y": 0.0}; double theta = 0.0; string frame_id = "map"; }
+record Twist2D { double linear = 0.0; double angular = 0.0; }
+
+process Pose2D pose_move(Pose2D pose, Twist2D twist, double dt = 1.0);
+```
+
+> データ型は juiz の次の版 (0.0.23) で入ります。公開までは `requirements.txt` で juiz の main のコミットを指定しているので、`pip install -r requirements.txt` で juiz-cli をソースからビルドします (Rust が要ります。https://rustup.rs/)。
+
+まず Python の型を `gen/` に作ります。設定ファイルの `option.pythonpath` で `gen/` を読みます。
+
+```sh
+juiz idl -g python -o gen types/geometry.jidl
+```
+
+型の付いた Process は、作った型を型ヒントに書くだけです ([process/pose_move_python.py](process/pose_move_python.py))。辞書で届いた値も `Pose2D` の値になってから関数に渡り、戻り値は `Pose2D` のまま返せます。
+
+```python
+from juiz import juiz_process
+from examples.geometry import Point2D, Pose2D, Twist2D
+
+@juiz_process
+def pose_move_python(pose: Pose2D = Pose2D(), twist: Twist2D = Twist2D(), dt: float = 1.0) -> Pose2D:
+    ...
+```
+
+#### 型付きの値をつなぐ: typed_pose.conf
+
+```text
+twist0 (twist_python, Twist2D) --Pull--> move0 (pose_move_python) --Push--> print0 (pose_print_python, Pose2D を表示)
+```
+
+```sh
+juiz -f typed_pose.conf -d
+```
+
+別のターミナルから `move0` を実行 (execute) すると、`twist0` から速度を取ってきて動き、結果を `print0` に送ります。
+
+```sh
+curl -X PATCH "http://127.0.0.1:8000/api/process/execute?identifier=core://core/process/move0::pose_move_python" -H "Content-Type: application/json" -d '{}'
+# => {"frame_id":"map","position":{"x":0.5,"y":0.0},"theta":0.0}
+```
+
+```text
+pose_move_python: (0.00, 0.00, 0.00) -> (0.50, 0.00, 0.00)
+pose_print_python receives Pose2D(x=0.50, y=0.00, theta=0.00, frame_id=map)
+```
+
+CLI や curl からは今までどおり辞書で呼べます。書かなかったフィールドは既定値になり、型に合わない値は関数を呼ぶ前にエラーになります。
+
+```sh
+juiz process call "http://127.0.0.1:8000/process/move0::pose_move_python" '{"pose": {"position": {"x": 1.0, "y": 2.0}}, "twist": {"linear": 1.0}, "dt": 2.0}' -p
+# => CapsulePtr((value:Value({"frame_id":"map","position":{"x":3.0,"y":2.0},"theta":0.0}), option: []))
+juiz process call "http://127.0.0.1:8000/process/move0::pose_move_python" '{"pose": {"position": {"x": "a"}}, "twist": {}, "dt": 1.0}' -p
+# => ... ValueDoesNotMatchTypeError: value does not match type double at 'pose.position.x': expected a number, found "a"
+```
+
+JIDL の `process pose_move(...)` からは、型付きで呼び出すクライアント `PoseMoveClient` も作られます ([scripts/pose_client.py](scripts/pose_client.py))。引数も戻り値も `Pose2D` で受け渡せます。名前で探すので、ほかの言語のサンプルの `pose_move` も同じように呼べます。
+
+```python
+from examples.geometry import Point2D, Pose2D, PoseMoveClient, Twist2D
+
+move = PoseMoveClient.connect("move0")
+moved = move(Pose2D(position=Point2D(x=1.0, y=2.0)), Twist2D(linear=1.0), dt=2.0)
+```
+
+```sh
+python scripts/pose_client.py
+# Pose2D: x=3.00 y=2.00 theta=0.00 frame_id=map
+# dt omitted: x=2.00
+```
+
+読み込んだ型は `juiz type` で見られます。
+
+```sh
+juiz type list
+# => ["examples.geometry.Point2D@sha256:5649ab39…","examples.geometry.Pose2D@sha256:123b8c15…","examples.geometry.Twist2D@sha256:115b9e0f…"]
+juiz type show examples.geometry.Pose2D
+# // examples.geometry.Pose2D@sha256:123b8c15…
+# // used by: pose_move_python, pose_print_python
+# namespace examples.geometry;
+# ...
+```
+
+#### 型が合わないとつながらない: typed_mismatch.conf
+
+`twist0` の `Twist2D` を `move0` の引数 `pose` (`Pose2D`) につなごうとする設定ファイルです。juiz は接続を作らず、エラーで終わります。
+
+```sh
+juiz -f typed_mismatch.conf -d
+# Error:setup_objects() failed in setup in system.rs
+# ...
+#     2: Type examples.geometry.Twist2D@sha256:115b9e0f… cannot be read as examples.geometry.Pose2D@sha256:123b8c15… at 'Pose2D': record name examples.geometry.Twist2D does not match examples.geometry.Pose2D (add an alias to read it)
+```
+
 ## 構成
 
 | パス | 内容 |
@@ -243,8 +348,10 @@ Python 同士の段の間で変換を省く遅延評価 ([OpenJUIZ/juiz#3](https
 | `process/` | Process (入力と出力を持つ冪等な関数) のサンプル |
 | `container/` | Container (状態を持つ) と ContainerProcess のサンプル |
 | `component/` | 複数の要素を 1 つのファイルにまとめた Component のサンプル |
+| `types/` | 4 つのサンプルリポジトリで共通に使う型 (JIDL) |
 | `images/` | 画像処理のサンプル (`image_pipeline.conf`) が読み込む画像 |
 | `scripts/time_image_pipeline.py` | `image_pipeline.conf` の Composite 版と接続版の時間を測るスクリプト |
+| `scripts/pose_client.py` | 生成した client stub (`PoseMoveClient`) で `typed_pose.conf` の `move0` を呼ぶスクリプト |
 | `*.conf` | 各サンプルを動かすための juiz の設定ファイル |
 | `requirements.txt` | juiz-cli のバージョン指定 |
 | `tests/test_examples.py` | 上のサンプルを起動して呼び出し、結果を確かめるテスト (`python tests/test_examples.py`)。CI でも実行する |
