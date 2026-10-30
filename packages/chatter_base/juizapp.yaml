@@ -1,0 +1,13 @@
+# 基礎パッケージの例。juiz run chatter_base で常駐させると、IPC 名 chatter_base と HTTP の 8100 番で待ち受け、
+# talker0 が 1 秒ごとに Topic chatter へ文字列を publish する。アプリ chatter_listener がこれにつなぐ
+format: 1
+name: chatter_base
+version: 0.1.0
+kind: base
+description: "Topic chatter に 1 秒ごとに文字列を publish する基礎パッケージ"
+license: MIT OR Apache-2.0
+entry: app.conf
+python:
+  version: ">=3.10"
+base:
+  http_port: 8100
