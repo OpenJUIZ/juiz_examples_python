@@ -1,0 +1,9 @@
+# talker_listener.conf を .juizapp にしたもの。python/ の .py は scripts/make_packages.py が process/ から写す
+format: 1
+name: talker_listener
+version: 0.1.0
+description: "talker_python と listener_python を Push でつなぐ例"
+license: MIT OR Apache-2.0
+entry: app.conf
+python:
+  version: ">=3.10"

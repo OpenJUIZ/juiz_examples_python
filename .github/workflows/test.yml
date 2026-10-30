@@ -3,6 +3,7 @@ name: test
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -24,3 +25,33 @@ jobs:
         run: python tests/test_examples.py
         env:
           PYTHONIOENCODING: utf-8
+      # テストで作った .juizapp (packages/) を、タグのときに Releases に載せるため残す。
+      # Python だけのパッケージ (targets: [any]) なので、1 つの OS のものだけ残す
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: juizapp-${{ matrix.os }}
+          path: dist/*.juizapp
+          if-no-files-found: error
+
+  # v* のタグを付けたときは、作った .juizapp を Releases に載せる
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [examples]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: juizapp-*
+          path: dist
+          merge-multiple: true
+      - name: Releases に載せる
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -l dist
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "サンプルのアプリの .juizapp (juiz ${GITHUB_REF_NAME#v} 用)"
+          gh release upload "$GITHUB_REF_NAME" dist/*.juizapp --clobber

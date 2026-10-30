@@ -1,0 +1,12 @@
+# 基礎パッケージ chatter_base を使うアプリの例。juiz run chatter_listener で起動すると、
+# 動いている chatter_base に subsystem としてつなぎ (既定は ipc://chatter_base)、Topic chatter を受け取って表示する
+format: 1
+name: chatter_listener
+version: 0.1.0
+description: "chatter_base の Topic chatter を受け取って表示するアプリ"
+license: MIT OR Apache-2.0
+entry: app.conf
+python:
+  version: ">=3.10"
+depends:
+  chatter_base: ">=0.1, <0.2"

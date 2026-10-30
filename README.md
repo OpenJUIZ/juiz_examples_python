@@ -1,7 +1,7 @@
 # juiz_examples_python
 
 ロボット・IoT 向けミドルウェア [juiz](https://github.com/OpenJUIZ/juiz) の Python 版サンプル集です。
-`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.0.27 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
+`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.0.28 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
 
 Rust 版のサンプルは [juiz_examples_rust](https://github.com/OpenJUIZ/juiz_examples_rust) にあります。
 
@@ -32,7 +32,7 @@ juiz --help
 <details>
 <summary>cargo でインストールした juiz を使う場合</summary>
 
-Rust のサンプルも同じ `juiz` で動かしたい場合は、`cargo install juiz_app` で入れた `juiz` を使い、Python 側は `pip install pyjuiz==0.0.27` だけを入れます。
+Rust のサンプルも同じ `juiz` で動かしたい場合は、`cargo install juiz_app` で入れた `juiz` を使い、Python 側は `pip install pyjuiz==0.0.28` だけを入れます。
 この `juiz` はビルド時に見つけた Python (`python3`) を組み込むので、venv も同じ Python で作ってください (Ubuntu なら `sudo apt install python3-dev python3-venv` も必要です)。
 pip の `juiz` は CI でビルドされたものなので、手元でビルドした Rust プラグインは読み込めません (Rust のコンパイラと juiz_sdk の版がそろっていることを起動時に確かめるため)。
 
@@ -339,6 +339,52 @@ juiz -f typed_mismatch.conf -d
 #     2: Type examples.geometry.Twist2D@sha256:115b9e0f… cannot be read as examples.geometry.Pose2D@sha256:123b8c15… at 'Pose2D': record name examples.geometry.Twist2D does not match examples.geometry.Pose2D (add an alias to read it)
 ```
 
+### アプリを .juizapp で配る
+
+`packages/` の下のアプリを、1 つのファイル (`.juizapp`、zip) にまとめて配れます (juiz 0.0.28 から)。受け取った人はサンプル集をクローンしなくても、`juiz run` だけで動かせます。
+
+```sh
+python scripts/make_packages.py
+# Packed talker_listener 0.1.0 (any; 5 files) into .../dist/talker_listener-0.1.0.juizapp
+# Packed chatter_base 0.1.0 (any; 4 files) into .../dist/chatter_base-0.1.0.juizapp
+# Packed chatter_listener 0.1.0 (any; 4 files) into .../dist/chatter_listener-0.1.0.juizapp
+```
+
+`packages/<名前>/` に置くのはマニフェスト `juizapp.yaml` と設定ファイル `app.conf` だけで、`scripts/make_packages.py` が Process の `.py` を `process/` から写してから `juiz pack` を呼びます。Python だけのパッケージなので、どの OS で作っても同じものになり、どの OS でも動きます。
+タグ (`v*`) を付けると、CI が作った `.juizapp` を [Releases](https://github.com/OpenJUIZ/juiz_examples_python/releases) に載せます。
+
+ファイルを渡すと、展開してそのまま起動します (talker_listener.conf と同じ動き)。
+
+```sh
+juiz run dist/talker_listener-0.1.0.juizapp
+# listener_python receives "Hello, World!"
+```
+
+#### 基礎パッケージとアプリ: chatter_base / chatter_listener
+
+常駐させる側を基礎パッケージ (`kind: base`)、それを使う側をアプリとして分けて配る例です。
+
+- `chatter_base`: `talker0` が 1 秒ごとに Topic `chatter` へ `"Hello from chatter_base"` を publish する。IPC 名 `chatter_base` と HTTP の 8100 番 (`base.http_port`) で待ち受ける
+- `chatter_listener`: `depends: {chatter_base: ">=0.1, <0.2"}`。`listener0` が Topic `chatter` を受け取って表示する
+
+インストールしておくと、名前で起動できます。
+
+```sh
+juiz install dist/chatter_base-0.1.0.juizapp
+juiz install dist/chatter_listener-0.1.0.juizapp
+juiz packages
+# NAME              VERSION  KIND
+# chatter_base      0.1.0    base
+# chatter_listener  0.1.0    app
+
+juiz run chatter_base              # ターミナル 1
+juiz run chatter_listener          # ターミナル 2
+# listener_python receives "Hello from chatter_base"
+```
+
+アプリは起動するときに `ipc://chatter_base` へ subsystem としてつなぎ、相手が chatter_base の 0.1 系であることを確かめます。基礎を起動していなければ、`juiz run chatter_base` で先に起動するよう案内して止まります。
+別の機械で動いている基礎を使うときは、`juiz run chatter_listener --depend chatter_base=http://192.168.0.10:8100` のように接続先を指定します。
+
 ## 構成
 
 | パス | 内容 |
@@ -351,6 +397,8 @@ juiz -f typed_mismatch.conf -d
 | `scripts/time_image_pipeline.py` | `image_pipeline.conf` の Composite 版と接続版の時間を測るスクリプト |
 | `scripts/pose_client.py` | 生成した client stub (`PoseMoveClient`) で `typed_pose.conf` の `move0` を呼ぶスクリプト |
 | `*.conf` | 各サンプルを動かすための juiz の設定ファイル |
+| `packages/` | `.juizapp` にするアプリのマニフェストと設定ファイル |
+| `scripts/make_packages.py` | `packages/` のアプリを `dist/` に `.juizapp` にするスクリプト |
 | `requirements.txt` | juiz-cli のバージョン指定 |
 | `tests/test_examples.py` | 上のサンプルを起動して呼び出し、結果を確かめるテスト (`python tests/test_examples.py`)。CI でも実行する |
 

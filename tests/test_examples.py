@@ -328,6 +328,79 @@ def run_two_namespaces(juiz: str) -> bool:
     return ok
 
 
+def run_packages(juiz: str) -> bool:
+    """README の「.juizapp で配る」の手順。
+
+    scripts/make_packages.py で dist/ に .juizapp を作り、talker_listener をファイルから juiz run する。
+    基礎 chatter_base とアプリ chatter_listener は juiz install してから名前で juiz run し、
+    アプリが基礎の Topic chatter を受け取ること。インストール先は一時ディレクトリにする。
+    """
+    print("--- scripts/make_packages.py / juiz run / juiz install", flush=True)
+    result = subprocess.run([sys.executable, "scripts/make_packages.py"], cwd=ROOT, capture_output=True,
+                            text=True, encoding="utf-8", errors="replace", timeout=120)
+    print(result.stdout.strip(), flush=True)
+    if result.returncode != 0:
+        print(f"NG: .juizapp を作れませんでした\n{result.stderr}", file=sys.stderr)
+        return False
+    data_dir = tempfile.mkdtemp(prefix="juiz_data_")
+    saved = {k: os.environ.get(k) for k in ["JUIZ_DATA_DIR", "JUIZ_CACHE_DIR"]}
+    os.environ["JUIZ_DATA_DIR"] = os.path.join(data_dir, "data")
+    os.environ["JUIZ_CACHE_DIR"] = os.path.join(data_dir, "cache")
+    servers = []
+    logs = []
+    ok = True
+
+    def start(args: list, expected: str) -> bool:
+        log = tempfile.NamedTemporaryFile("w+", suffix=".log", delete=False)
+        logs.append(log.name)
+        servers.append(start_server(juiz, args, log))
+        log.close()
+        if wait_for_output(log.name, expected, 60):
+            print(f"juiz {' '.join(args)}\n  {expected}", flush=True)
+            return True
+        print(f"NG: juiz の出力に {expected!r} が含まれていません", file=sys.stderr)
+        return False
+
+    try:
+        # ファイルを渡すと、展開してそのまま起動する
+        wait_for_port_free(PORT, 30)
+        ok = start(["run", "dist/talker_listener-0.1.0.juizapp"], 'listener_python receives "Hello, World!"')
+        if ok and not stop_server(servers.pop()):
+            ok = False
+        # 基礎とアプリをインストールして名前で起動する
+        for package in ["chatter_base", "chatter_listener"]:
+            if not ok:
+                break
+            args = ["install", f"dist/{package}-0.1.0.juizapp"]
+            returncode, stdout, stderr = run_call(juiz, args)
+            print(f"juiz {' '.join(args)}\n  {stdout.strip()}", flush=True)
+            if returncode != 0 or f"Installed {package} 0.1.0" not in stdout:
+                print(f"NG: {package} をインストールできませんでした\n{stderr}", file=sys.stderr)
+                ok = False
+        ok = ok and start(["run", "chatter_base"], 'talker_python says "Hello from chatter_base"')
+        ok = ok and start(["run", "chatter_listener"], 'listener_python receives "Hello from chatter_base"')
+    except Exception as e:
+        print(f"NG: {e}", file=sys.stderr)
+        ok = False
+    finally:
+        # アプリを先に止める
+        for server in reversed(servers):
+            if server.poll() is None and not stop_server(server):
+                ok = False
+        for path in logs:
+            if not ok:
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    print(f"juiz の出力:\n{f.read()}", file=sys.stderr)
+            os.unlink(path)
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        shutil.rmtree(data_dir, ignore_errors=True)
+    return ok
+
+
 def main() -> int:
     juiz = shutil.which("juiz")
     if juiz is None:
@@ -340,6 +413,8 @@ def main() -> int:
         failed.append("increment_process.conf --namespace")
     if not run_mismatch(juiz):
         failed.append(MISMATCH_CONF)
+    if not run_packages(juiz):
+        failed.append("packages/")
     if failed:
         print(f"失敗したサンプル: {', '.join(failed)}", file=sys.stderr)
         return 1
