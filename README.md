@@ -1,7 +1,7 @@
 # juiz_examples_python
 
 ロボット・IoT 向けミドルウェア [juiz](https://github.com/OpenJUIZ/juiz) の Python 版サンプル集です。
-`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.1.0 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
+`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.2.0 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
 
 Rust 版のサンプルは [juiz_examples_rust](https://github.com/OpenJUIZ/juiz_examples_rust) にあります。
 
@@ -32,7 +32,7 @@ juiz --help
 <details>
 <summary>cargo でインストールした juiz を使う場合</summary>
 
-Rust のサンプルも同じ `juiz` で動かしたい場合は、`cargo install juiz_app` で入れた `juiz` を使い、Python 側は `pip install pyjuiz==0.1.0` だけを入れます。
+Rust のサンプルも同じ `juiz` で動かしたい場合は、`cargo install juiz_app` で入れた `juiz` を使い、Python 側は `pip install pyjuiz==0.2.0` だけを入れます。
 この `juiz` はビルド時に見つけた Python (`python3`) を組み込むので、venv も同じ Python で作ってください (Ubuntu なら `sudo apt install python3-dev python3-venv` も必要です)。
 pip の `juiz` は CI でビルドされたものなので、手元でビルドした Rust プラグインは読み込めません (Rust のコンパイラと juiz_sdk の版がそろっていることを起動時に確かめるため)。
 
@@ -339,6 +339,77 @@ juiz -f typed_mismatch.conf -d
 #     2: Type examples.geometry.Twist2D@sha256:115b9e0f… cannot be read as examples.geometry.Pose2D@sha256:123b8c15… at 'Pose2D': record name examples.geometry.Twist2D does not match examples.geometry.Pose2D (add an alias to read it)
 ```
 
+### Transformations: 部品の位置関係を木にする
+
+ロボットの部品 (台車・雲台・カメラ) を Container にし、部品同士のつながり (Transform) と基点 (Anchor) を設定ファイルに書くと、juiz が各部品の位置姿勢 (ContainerPose) を計算します。
+
+> juiz 0.2.0 から使える機能です。
+
+`transformations.conf` の木は次のとおりです。`map` と `odom` は juiz に組み込みの Anchor で、プラグインは要りません。
+
+```text
+map (PeriodicExecutionAnchor, 10 Hz)        … 10 Hz で木をたどって位置姿勢を計算し直す
+└─ odom (StaticAnchor)                      … 書き込みがあったときだけ計算し直す。map から (1, 2, 0) ずれている
+   └─ base0 (台車 mobile_base_python)        … move0 がオドメトリを set_pose で書く
+      └─ pantilt0 (雲台 pantilt_python)      … 台車の (0.1, 0, 0.3) に付く。pan0 がパン角を書く
+         └─ camera0 (カメラ camera_python)   … 雲台の (0.05, 0, 0.02) に付く。Transform だけ
+```
+
+部品は `component/mobile_robot_python.py` の 1 つの Component です。ContainerProcess の中では `juiz.pose(obj, "map")` で読み、`juiz.set_pose(obj, "odom", pose)` で書きます (`obj` は ContainerProcess の第 1 引数)。`set_pose` は親 → 自分の Transform を書き換えるので、子の雲台・カメラも一緒に動きます。
+
+```python
+from juiz import juiz_container_process, set_pose
+from juiz_std.geometry import Point3D, Pose, PoseStamped
+
+@juiz_container_process(container_type="mobile_base_python")
+def mobile_base_python_move(base, vx: float = 0.0, omega: float = 0.0, dt: float = 1.0,
+                            reference: str = "odom") -> PoseStamped:
+    base.x += vx * math.cos(base.theta) * dt
+    base.y += vx * math.sin(base.theta) * dt
+    base.theta += omega * dt
+    p = Pose(position=Point3D(x=base.x, y=base.y, z=0.0), orientation=yaw_quaternion(base.theta))
+    return set_pose(base, reference, p)
+```
+
+また `pose_listeners:` で、台車の位置姿勢が書かれたら Process `print0` (`pose_print_python`、引数は `juiz_std.geometry.PoseStamped`) を呼ぶ Pose 通知を登録しています。
+
+```sh
+juiz -f transformations.conf -d
+```
+
+別の端末で台車を動かし、雲台を 90 度回します。
+
+```sh
+juiz container-process call "http://127.0.0.1:8000/container_process/move0::mobile_base_python_move:base0" '{"vx": 1.0, "dt": 1.0}' -p
+# => CapsulePtr((value:Value({"header":{"frame_id":"odom",...},"pose":{"orientation":{...},"position":{"x":1.0,"y":0.0,"z":0.0}}}), option: []))
+juiz container-process call "http://127.0.0.1:8000/container_process/pan0::pantilt_python_set_pan:pantilt0" '{"pan": 1.5707963267948966}' -p
+```
+
+1 つ目の呼び出しで、juiz を起動した端末に Pose 通知の出力が出ます。
+
+```text
+pose_print_python: x=1.00 y=0.00 yaw=0.0deg (from odom)
+```
+
+カメラの位置姿勢を読みます。雲台が回ったので、カメラは台車の左 (y = 0.05) に来ています。`map` から見ると `map` → `odom` のずれ (1, 2, 0) が足されます。
+
+```sh
+juiz container pose camera0 --reference odom
+# => position: x=1.1, y=0.05, z=0.32 (JSON の PoseStamped)
+juiz container pose camera0 --reference map
+# => position: x=2.1, y=2.05, z=0.32
+juiz container-process call "http://127.0.0.1:8000/container_process/camera_pose0::camera_python_pose:camera0" '{"reference": "map"}' -p
+juiz anchor tree map
+# map  position (0, 0, 0)  orientation (0, 0, 0, 1)
+# └─ odom  position (1, 2, 0)  orientation (0, 0, 0, 1)
+#    └─ base0  position (2, 2, 0)  orientation (0, 0, 0, 1)
+#       └─ pantilt0  position (2.1, 2, 0.3)  orientation (0, 0, 0.7071067811865475, 0.7071067811865476)
+#          └─ camera0  position (2.1, 2.05, 0.32)  orientation (0, 0, 0.7071067811865475, 0.7071067811865476)
+```
+
+`map` は Periodic なので、書き込みの直後に読むと最大 1 周期 (0.1 秒) 古い値が返ります。`odom` は Static なので、`set_pose` が戻った時点で新しい値になっています。
+管理画面 (`http://127.0.0.1:8000/ui`) の「変換木」でも木と位置姿勢を見られます。
+
 ### アプリを .juizapp で配る
 
 `packages/` の下のアプリを、1 つのファイル (`.juizapp`、zip) にまとめて配れます (juiz 0.0.28 から)。受け取った人はサンプル集をクローンしなくても、`juiz run` だけで動かせます。
@@ -391,7 +462,7 @@ juiz run chatter_listener          # ターミナル 2
 | --- | --- |
 | `process/` | Process (入力と出力を持つ冪等な関数) のサンプル |
 | `container/` | Container (状態を持つ) と ContainerProcess のサンプル |
-| `component/` | 複数の要素を 1 つのファイルにまとめた Component のサンプル |
+| `component/` | 複数の要素を 1 つのファイルにまとめた Component のサンプル (`mobile_robot_python.py` は Transformations の部品) |
 | `types/` | 4 つのサンプルリポジトリで共通に使う型 (JIDL) |
 | `images/` | 画像処理のサンプル (`image_pipeline.conf`) が読み込む画像 |
 | `scripts/time_image_pipeline.py` | `image_pipeline.conf` の Composite 版と接続版の時間を測るスクリプト |
