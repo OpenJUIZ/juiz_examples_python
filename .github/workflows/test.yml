@@ -19,6 +19,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # 公開前の juiz を使う間は、requirements.txt が juiz-cli を git のソースからビルドする (Rust が要る。
+      # GitHub のランナーには Rust が入っている)
       - name: juiz-cli をインストールする
         run: pip install -r requirements.txt
       - name: サンプルを動かして結果を確かめる
