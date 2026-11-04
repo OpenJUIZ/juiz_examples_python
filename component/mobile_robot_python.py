@@ -8,6 +8,7 @@
 - mobile_base_python_move はオドメトリを積分して、odom から見た自分の位置姿勢を set_pose で書く。
 - pantilt_python_set_pan はパン角を書く (台車から見た自分の向きだけを変える)。
 - camera_python_pose は基準から見た自分の位置姿勢を pose で読む。カメラは Transform で雲台につながっているだけ。
+  読むだけなので readonly=True にしている。
 - pose_print_python は Pose 通知 (conf の pose_listeners:) で呼ばれる Process。
 """
 
@@ -85,7 +86,9 @@ def camera_python() -> Camera:
     return Camera()
 
 
-@juiz_container_process(container_type="camera_python")
+# 読むだけなので readonly にする (OpenJUIZ/juiz#377)。juiz は Container を読み出しロックで呼ぶので、
+# 同じ Container の readonly 同士は並行に走る。中で set_pose を呼ぶと PoseNotWritableError になる
+@juiz_container_process(container_type="camera_python", readonly=True)
 def camera_python_pose(camera, reference: str = "map") -> PoseStamped:
     """基準 reference から見た自分の位置姿勢"""
     return pose(camera, reference)

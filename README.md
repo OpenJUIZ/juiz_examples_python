@@ -1,7 +1,7 @@
 # juiz_examples_python
 
 ロボット・IoT 向けミドルウェア [juiz](https://github.com/OpenJUIZ/juiz) の Python 版サンプル集です。
-`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.2.1 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
+`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.2.1 に入っているので、`pip install` だけで試せます。ただし readonly の ContainerProcess の例は juiz の次の版の機能を使うので、公開までは `requirements.txt` で juiz の main のコミットをソースから入れます ([読むだけの ContainerProcess](#読むだけの-containerprocess-readonly) を参照)。Rust や juiz のソースは要りません。
 
 Rust 版のサンプルは [juiz_examples_rust](https://github.com/OpenJUIZ/juiz_examples_rust) にあります。
 
@@ -409,6 +409,27 @@ juiz anchor tree map
 
 `map` は Periodic なので、書き込みの直後に読むと最大 1 周期 (0.1 秒) 古い値が返ります。`odom` は Static なので、`set_pose` が戻った時点で新しい値になっています。
 管理画面 (`http://127.0.0.1:8000/ui`) の「変換木」でも木と位置姿勢を見られます。
+
+#### 読むだけの ContainerProcess: readonly
+
+カメラの `camera_python_pose` は位置姿勢を読むだけなので、`readonly=True` を付けて readonly の ContainerProcess にしています。
+
+```python
+@juiz_container_process(container_type="camera_python", readonly=True)
+def camera_python_pose(camera, reference: str = "map") -> PoseStamped:
+    """基準 reference から見た自分の位置姿勢"""
+    return pose(camera, reference)
+```
+
+juiz は readonly の ContainerProcess を Container の読み出しロックで呼ぶので、同じ Container の readonly 同士は並行に走ります (readonly でないものとは順番に走ります)。readonly の中で `set_pose` を呼ぶと `PoseNotWritableError` になります。Python では Container のオブジェクト自体の書き換えは止められないので、readonly の中では読むだけにしてください。
+readonly かどうかは ContainerProcess の情報 (HTTP の API) に出ます。
+
+```sh
+curl "http://127.0.0.1:8000/api/container_process/profile_full?identifier=core://core/container_process/camera_pose0::camera_python_pose:camera0"
+# => {..."readonly":true,...}
+```
+
+> juiz の次の版 (0.2.1 の次) で入る機能です。公開までは juiz の main のコミットを使います。`requirements.txt` が juiz-cli と pyjuiz をそのコミットのソースから入れます (Rust が要ります)。
 
 #### System をまたぐ: transformations_map.conf と transformations_robot.conf
 
