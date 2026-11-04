@@ -1,1 +1,4 @@
-juiz-cli==0.2.0
+# System をまたぐ Transform のサンプル (transformations_robot.conf) は juiz の次の版で入る機能を使うので、公開までは
+# juiz の main のコミットから入れる (juiz-cli のビルドに Rust が要る)。公開後は juiz-cli==<版> に戻す
+pyjuiz @ git+https://github.com/OpenJUIZ/juiz@e28e9297454fa2ff86f5df4a812690c88a5b8722#subdirectory=bindings/pyjuiz
+juiz-cli @ git+https://github.com/OpenJUIZ/juiz@e28e9297454fa2ff86f5df4a812690c88a5b8722#subdirectory=bindings/juiz_py
