@@ -21,6 +21,11 @@ jobs:
           python-version: "3.12"
       - name: juiz-cli をインストールする
         run: pip install -r requirements.txt
+      # Container の 3D モデル (OpenJUIZ/juiz#385) は juiz の次の版で入るので、公開までは juiz-cli だけ main のコミットから
+      # ビルドして入れ直す。公開 (OpenJUIZ/juiz#386) の後にこの手順を消し、requirements.txt の版を上げる
+      - uses: dtolnay/rust-toolchain@stable
+      - name: juiz-cli を juiz の main のコミットから入れ直す
+        run: pip install --force-reinstall --no-deps "juiz-cli @ git+https://github.com/OpenJUIZ/juiz@408a5e4b899dea184c2a590b50e86ed83ab8201e#subdirectory=bindings/juiz_py"
       - name: サンプルを動かして結果を確かめる
         run: python tests/test_examples.py
         env:
