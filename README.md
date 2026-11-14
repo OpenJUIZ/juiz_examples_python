@@ -1,11 +1,11 @@
 # juiz_examples_python
 
 ロボット・IoT 向けミドルウェア [juiz](https://github.com/OpenJUIZ/juiz) の Python 版サンプル集です。
-`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.2.7 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
+`juiz` コマンドと Python 用パッケージは PyPI の [juiz-cli](https://pypi.org/project/juiz-cli/) 0.2.8 に入っているので、`pip install` だけで試せます。Rust や juiz のソースは要りません。
 
 Rust 版のサンプルは [juiz_examples_rust](https://github.com/OpenJUIZ/juiz_examples_rust) にあります。
 
-> **自分の部品を新しく作り始めるときは**、サンプルを写す代わりに `juiz pkg create my_robot -b python` で雛形を作れます (juiz 0.2.7 から)。ビルド・起動・呼び出し・`.juizapp` での配布までそのまま通る形で、SDK の版も `juiz` コマンドと同じ版で書かれます。詳しくは公式サイトの [雛形から始める (juiz pkg)](https://openjuiz.github.io/ja/guides/pkg/) を見てください。
+> **自分の部品を新しく作り始めるときは**、サンプルを写す代わりに `juiz pkg create my_robot -b python` で雛形を作れます (juiz 0.2.6 から)。ビルド・起動・呼び出し・`.juizapp` での配布までそのまま通る形で、SDK の版も `juiz` コマンドと同じ版で書かれます。詳しくは公式サイトの [雛形から始める (juiz pkg)](https://openjuiz.github.io/ja/guides/pkg/) を見てください。
 
 ## しくみ
 
@@ -34,7 +34,7 @@ juiz --help
 <details>
 <summary>cargo でインストールした juiz を使う場合</summary>
 
-Rust のサンプルも同じ `juiz` で動かしたい場合は、`cargo install juiz_app` で入れた `juiz` を使い、Python 側は `pip install pyjuiz==0.2.7` だけを入れます。
+Rust のサンプルも同じ `juiz` で動かしたい場合は、`cargo install juiz_app` で入れた `juiz` を使い、Python 側は `pip install pyjuiz==0.2.8` だけを入れます。
 この `juiz` はビルド時に見つけた Python (`python3`) を組み込むので、venv も同じ Python で作ってください (Ubuntu なら `sudo apt install python3-dev python3-venv` も必要です)。
 pip の `juiz` は CI でビルドされたものなので、手元でビルドした Rust プラグインは読み込めません (Rust のコンパイラと juiz_sdk の版がそろっていることを起動時に確かめるため)。
 
