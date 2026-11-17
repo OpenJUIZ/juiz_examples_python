@@ -588,7 +588,10 @@ juiz run chatter_listener          # ターミナル 2
 ```
 
 アプリは起動するときに `ipc://chatter_base` へ subsystem としてつなぎ、相手が chatter_base の 0.1 系であることを確かめます。基礎を起動していなければ、`juiz run chatter_base` で先に起動するよう案内して止まります。
+juiz 0.3.0 からは、端末から起動していれば、その場で chatter_base を別の窓で起動するか、つなぎ先を入力するかを選べます (入力したつなぎ先は覚えて次から使い、`--forget-depends` で忘れます)。
 別の機械で動いている基礎を使うときは、`juiz run chatter_listener --depend chatter_base=http://192.168.0.10:8100` のように接続先を指定します。
+
+> juiz 0.3.0 から、`juiz associate` を 1 回実行しておくと `.juizapp` をダブルクリックで起動できます。ポートが使われていたときや、依存する基礎につながらないときは、起動した端末で選び直せます。詳しくは公式サイトの [アプリの配布 (.juizapp)](https://openjuiz.github.io/ja/guides/app-package/#ダブルクリックで起動する) を見てください。
 
 ## 構成
 
