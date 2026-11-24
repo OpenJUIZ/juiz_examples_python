@@ -6,6 +6,8 @@
 Rust 版のサンプルは [juiz_examples_rust](https://github.com/OpenJUIZ/juiz_examples_rust) にあります。
 
 > **自分の部品を新しく作り始めるときは**、サンプルを写す代わりに `juiz pkg create my_robot -b python` で雛形を作れます (juiz 0.2.6 から)。ビルド・起動・呼び出し・`.juizapp` での配布までそのまま通る形で、SDK の版も `juiz` コマンドと同じ版で書かれます。詳しくは公式サイトの [雛形から始める (juiz pkg)](https://openjuiz.github.io/ja/guides/pkg/) を見てください。
+>
+> juiz 0.3.5 からは、雛形と一緒に型の設計文書 `juizdesign.yaml` もできます。先に設計文書を書いて `juiz pkg design check` で確かめてから、`juiz pkg create -d juizdesign.yaml -b python` で雛形を作ることもできます。詳しくは [設計文書 (juizdesign.yaml)](https://openjuiz.github.io/ja/guides/pkg/#設計文書juizdesignyaml) を見てください。
 
 ## しくみ
 
