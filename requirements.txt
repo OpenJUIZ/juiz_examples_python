@@ -1,1 +1,1 @@
-juiz-cli==0.3.5
+juiz-cli==0.3.7
